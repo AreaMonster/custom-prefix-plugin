@@ -1,0 +1,43 @@
+<meta charset="utf-8" />
+<title>Prefix Audit Log</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="/style.css" />
+<link rel="icon" href="/favicon.ico" />
+<meta name="robots" content="noindex, nofollow" />
+
+<div class="wrap">
+  <header class="hero">
+    <div class="hero-icon" aria-hidden="true">🛡️</div>
+    <div>
+      <h1>Prefix Audit Log</h1>
+      <p class="muted">Admin-only. Not linked from anywhere public.</p>
+    </div>
+  </header>
+
+  <section class="admin-auth-section" id="loginSection">
+    <div class="section-head"><span class="section-label">Log in</span></div>
+    <form id="loginForm" class="admin-auth-row" autocomplete="on">
+      <input type="text" id="usernameInput" placeholder="Username" autocomplete="username" />
+      <input type="password" id="passwordInput" placeholder="Password" autocomplete="current-password" />
+      <button id="loginBtn" type="submit" class="primary">Log in</button>
+      <span id="authStatus" class="muted"></span>
+    </form>
+  </section>
+
+  <section class="audit-section" id="auditSection" hidden>
+    <div class="section-head">
+      <span class="section-label">Recent activity</span>
+      <div class="audit-toolbar">
+        <button id="refreshBtn" type="button" class="secondary">Refresh</button>
+        <button id="logoutBtn" type="button" class="secondary">Log out</button>
+      </div>
+    </div>
+    <input type="search" id="searchInput" class="search-input" placeholder="Search by player or prefix text…" />
+    <div id="auditList" class="audit-list"></div>
+    <p id="emptyState" class="muted" hidden>No matching activity.</p>
+  </section>
+</div>
+
+<script src="/color.js"></script>
+<script src="/deserialize.js"></script>
+<script src="/admin.js"></script>

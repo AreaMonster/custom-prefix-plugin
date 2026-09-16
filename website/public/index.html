@@ -1,0 +1,145 @@
+<meta charset="utf-8" />
+<title>Custom Prefix Builder</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="/style.css" />
+<link rel="icon" href="/favicon.ico" />
+
+<div class="wrap">
+  <header class="hero">
+    <div class="hero-icon" aria-hidden="true">✨</div>
+    <div>
+      <h1>Custom Prefix Builder</h1>
+      <p id="subtitle" class="muted">Loading your session…</p>
+    </div>
+  </header>
+
+  <div id="loading" class="loading">
+    <div class="spinner" aria-hidden="true"></div>
+    <span>Connecting to your session…</span>
+  </div>
+
+  <div id="expiredBanner" class="banner banner-error" hidden>
+    <span class="banner-icon" aria-hidden="true">⏱</span>
+    <div>
+      <strong>This link has expired.</strong>
+      <div>Go back in-game and run <code>/prefix</code> again to get a new one.</div>
+    </div>
+  </div>
+
+  <div id="appliedBanner" class="banner banner-ok" hidden>
+    <span class="banner-icon" aria-hidden="true">✔</span>
+    <div>
+      <strong>Saved!</strong>
+      <div>Your prefix will be applied in-game within a few seconds. You can close this tab.</div>
+    </div>
+  </div>
+
+  <main id="builder" hidden>
+    <section id="historySection" class="history-section" hidden>
+      <div class="section-head">
+        <span class="section-label">Your recent prefixes</span>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </section>
+
+    <section class="preview-section">
+      <div class="section-head">
+        <span class="section-label">Live preview</span>
+        <span id="countdown" class="pill"></span>
+      </div>
+      <div class="preview-frame">
+        <div id="preview" class="preview"></div>
+      </div>
+      <div class="preview-meta">
+        <span id="charCount" class="muted"></span>
+      </div>
+    </section>
+
+    <section class="segments-section">
+      <div class="section-head">
+        <span class="section-label">Segments</span>
+      </div>
+      <div id="segments"></div>
+      <div class="toolbar">
+        <button id="addSegment" type="button">
+          <span aria-hidden="true">＋</span> Add segment
+        </button>
+        <button id="loadExample" type="button" class="secondary">
+          <span aria-hidden="true">🎲</span> Load example
+        </button>
+      </div>
+    </section>
+
+    <section class="format-section">
+      <div class="section-head">
+        <span class="section-label">Output format</span>
+      </div>
+      <div class="format-options">
+        <label class="format-option">
+          <input type="radio" name="format" value="legacy" checked />
+          <span><strong>Legacy</strong> <code>&amp;#RRGGBB</code> — works everywhere LuckPerms hex colors do.</span>
+        </label>
+        <label class="format-option">
+          <input type="radio" name="format" value="minimessage" />
+          <span><strong>MiniMessage</strong> <code>&lt;gradient:...&gt;</code> — much shorter, but only renders correctly if your chat/tab-list plugin parses MiniMessage tags. Test in-game before relying on it.</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="save-section">
+      <button id="save" type="button" class="primary">
+        <span aria-hidden="true">💾</span> Save &amp; sync in-game
+      </button>
+      <span id="saveStatus" class="muted"></span>
+    </section>
+  </main>
+</div>
+
+<template id="segmentTemplate">
+  <div class="segment" draggable="true">
+    <div class="segment-row segment-row-top">
+      <span class="drag-handle" title="Drag to reorder" aria-hidden="true">⠿</span>
+      <input type="text" class="seg-text" placeholder="Text (leave blank for a trailing color)" maxlength="64" />
+      <button type="button" class="seg-remove" title="Remove segment" aria-label="Remove segment">✕</button>
+    </div>
+    <div class="segment-row">
+      <select class="seg-mode">
+        <option value="solid">Solid color</option>
+        <option value="gradient">Gradient</option>
+      </select>
+      <div class="color-stops"></div>
+      <button type="button" class="add-stop" title="Add gradient stop" hidden>+ stop</button>
+      <div class="format-toggles">
+        <button type="button" class="fmt-btn" data-fmt="bold" title="Bold"><b>B</b></button>
+        <button type="button" class="fmt-btn" data-fmt="italic" title="Italic"><i>I</i></button>
+        <button type="button" class="fmt-btn" data-fmt="underline" title="Underline"><u>U</u></button>
+        <button type="button" class="fmt-btn" data-fmt="strikethrough" title="Strikethrough"><s>S</s></button>
+        <button type="button" class="fmt-btn" data-fmt="obfuscated" title="Obfuscated (magic)">?</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="colorStopTemplate">
+  <span class="color-field">
+    <input type="color" class="stop-input" value="#FFFFFF" title="Color" />
+    <span class="hex-label stop-label">#FFFFFF</span>
+    <button type="button" class="stop-remove" title="Remove stop" aria-label="Remove stop" hidden>✕</button>
+  </span>
+</template>
+
+<template id="historyItemTemplate">
+  <div class="history-item">
+    <div class="history-preview"></div>
+    <div class="history-meta">
+      <span class="history-format-badge"></span>
+      <span class="history-time muted"></span>
+      <button type="button" class="history-use secondary">✎ Edit</button>
+    </div>
+  </div>
+</template>
+
+<script src="/color.js"></script>
+<script src="/serialize.js"></script>
+<script src="/deserialize.js"></script>
+<script src="/app.js"></script>

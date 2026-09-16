@@ -1,0 +1,19 @@
+# One blocked term per line, case-insensitive. Lines starting with '#' are
+# comments and blank lines are ignored.
+#
+# Copy this file to moderation.words.txt (same folder) and put your own
+# list in it — slurs, banned phrases, staff usernames, whatever your
+# community needs kept out of custom prefixes. moderation.words.txt is
+# gitignored so it never ends up in version control; only you (and anyone
+# with server access) ever see your actual list.
+#
+# Matching is substring-based after normalizing away spaces/punctuation
+# and common leetspeak substitutions (0->o, 1->i, 3->e, 4->a, 5->s, 7->t,
+# @->a, $->s, |->i), so "b4dword", "b a d w o r d", and "bad-word" all
+# match a blocked entry of "badword". This list is ADDED ON TOP OF a
+# built-in list of staff-role words (owner, admin, moderator, etc.) that's
+# always active — you don't need to list those yourself.
+#
+# Examples (replace with your own list):
+example1
+example2

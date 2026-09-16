@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>dev.customprefix</groupId>
+  <artifactId>custom-prefix-plugin</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <maven.compiler.source>17</maven.compiler.source>
+    <maven.compiler.target>17</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Pin to the Velocity/LuckPerms versions you actually run; the API
+         is stable across proxy patch releases, but double check the major
+         version matches your server. -->
+    <velocity.api.version>3.4.0-SNAPSHOT</velocity.api.version>
+    <luckperms.api.version>5.4</luckperms.api.version>
+  </properties>
+
+  <repositories>
+    <!-- Velocity API -->
+    <repository>
+      <id>papermc</id>
+      <url>https://repo.papermc.io/repository/maven-public/</url>
+    </repository>
+  </repositories>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.velocitypowered</groupId>
+      <artifactId>velocity-api</artifactId>
+      <version>${velocity.api.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <!-- LuckPerms is loaded by the proxy at runtime; we only need the API
+         classes at compile time. -->
+    <dependency>
+      <groupId>net.luckperms</groupId>
+      <artifactId>api</artifactId>
+      <version>${luckperms.api.version}</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>${project.artifactId}-${project.version}</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <release>17</release>
+          <!-- Velocity's @Plugin annotation processor (bundled in
+               velocity-api) generates velocity-plugin.json at compile
+               time — no manual resource file needed. -->
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

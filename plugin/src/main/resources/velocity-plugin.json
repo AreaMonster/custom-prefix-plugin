@@ -1,0 +1,8 @@
+{
+  "id": "custom-prefix-plugin",
+  "name": "CustomPrefixPlugin",
+  "version": "1.0.0",
+  "description": "Syncs web-designed LuckPerms prefixes to players.",
+  "authors": ["you"],
+  "main": "dev.customprefix.CustomPrefixPlugin"
+}

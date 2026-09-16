@@ -1,0 +1,22 @@
+services:
+  website:
+    build:
+      context: .
+    container_name: custom-prefix-website
+    restart: unless-stopped
+    ports:
+      # HOST_PORT is the port exposed on the machine itself — change it in
+      # .env if 8080 is already taken (common on shared hosts, e.g.
+      # Pterodactyl game server allocations). The container always listens
+      # on 8080 internally regardless.
+      - "${HOST_PORT:-8080}:8080"
+    env_file:
+      - ./.env
+    environment:
+      PORT: 8080
+    volumes:
+      # Persists player prefix history (data/history.json) and the audit
+      # log (data/audit.log) across container rebuilds. Safe to delete
+      # this folder to wipe both — sessions/links are memory-only by
+      # design and don't live here.
+      - ./data:/app/data

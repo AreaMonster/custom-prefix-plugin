@@ -1,0 +1,14 @@
+# website
+website/node_modules/
+website/.env
+website/data/
+website/moderation.words.txt
+
+# plugin
+plugin/target/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
