@@ -4,6 +4,7 @@ import com.velocitypowered.api.command.SimpleCommand;
 import com.velocitypowered.api.proxy.Player;
 import dev.customprefix.backend.SessionCreateResult;
 import dev.customprefix.luckperms.PrefixApplier;
+import dev.customprefix.luckperms.RankPrefixReader;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -77,11 +78,12 @@ public final class PrefixCommand implements SimpleCommand {
   private void handleCreate(Player player) {
     boolean hadPrevious = plugin.cancelActivePoller(player.getUniqueId());
     boolean bypassFilter = player.hasPermission(plugin.pluginConfig().bypassFilterPermissionNode());
+    String rankPrefix = RankPrefixReader.read(player.getUniqueId(), plugin.pluginConfig().prefixPriority());
 
-    plugin.backendClient().createSession(player.getUniqueId(), player.getUsername(), bypassFilter)
+    plugin.backendClient().createSession(player.getUniqueId(), player.getUsername(), bypassFilter, rankPrefix)
         .thenAccept(result -> {
           String key = hadPrevious ? "message.alreadyPending" : "message.linkSent";
-          player.sendMessage(buildLinkMessage(plugin.pluginConfig().message(key), result));
+          player.sendMessage(buildLinkMessage(plugin.pluginConfig().message(key), result, true));
           plugin.startPoller(player, result.token());
         })
         .exceptionally(err -> {
@@ -125,7 +127,7 @@ public final class PrefixCommand implements SimpleCommand {
 
     plugin.backendClient().requestAdminLink(player.getUniqueId(), player.getUsername())
         .thenAccept(result ->
-            player.sendMessage(buildLinkMessage(plugin.pluginConfig().message("message.adminLinkSent"), result)))
+            player.sendMessage(buildLinkMessage(plugin.pluginConfig().message("message.adminLinkSent"), result, false)))
         .exceptionally(err -> {
           player.sendMessage(Legacy.parse(plugin.pluginConfig().message("message.backendUnreachable")));
           plugin.logger().log(Level.WARNING,
@@ -149,7 +151,14 @@ public final class PrefixCommand implements SimpleCommand {
     return List.of();
   }
 
-  private Component buildLinkMessage(String template, SessionCreateResult result) {
+  /**
+   * @param showRawUrl also print the URL itself on a second line. Not every
+   *     client can click a chat link (web links disabled in chat settings,
+   *     Bedrock players joining through Geyser, ...), and without the text
+   *     there'd be nothing to copy. Left off for the single-use admin link,
+   *     which shouldn't sit around as readable text in chat/screenshots.
+   */
+  private Component buildLinkMessage(String template, SessionCreateResult result, boolean showRawUrl) {
     // Derived from the link's actual expiresAt rather than any local
     // config value — correct regardless of which endpoint issued it
     // (player links default to 20 min, admin links are a fixed 10 min on
@@ -163,6 +172,13 @@ public final class PrefixCommand implements SimpleCommand {
         .clickEvent(ClickEvent.openUrl(result.url()))
         .hoverEvent(HoverEvent.showText(Component.text(result.url())));
 
-    return Legacy.parse(text).append(link);
+    Component message = Legacy.parse(text).append(link);
+    if (showRawUrl) {
+      message = message.append(Component.newline()).append(
+          Component.text(result.url())
+              .color(NamedTextColor.GRAY)
+              .clickEvent(ClickEvent.openUrl(result.url())));
+    }
+    return message;
   }
 }

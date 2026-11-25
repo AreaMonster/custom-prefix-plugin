@@ -48,7 +48,7 @@
     }[c]));
   }
 
-  /** Renders the actual in-game colors/formatting instead of raw &#RRGGBB / <tags>. */
+  /** Renders the actual in-game colors/formatting instead of raw &#RRGGBB codes. */
   function renderColoredPreview(container, prefixString, format) {
     container.innerHTML = '';
     container.title = prefixString; // raw string still available on hover, for debugging
@@ -59,9 +59,18 @@
       container.appendChild(span);
       return;
     }
+    if (format === 'minimessage') {
+      // Entries saved back when MiniMessage was still an option. That
+      // format can't be rendered any more, so just show what was saved.
+      const span = document.createElement('span');
+      span.className = 'muted';
+      span.textContent = prefixString;
+      container.appendChild(span);
+      return;
+    }
     let segments;
     try {
-      segments = window.PrefixDeserialize.parseToSegments(prefixString, format);
+      segments = window.PrefixDeserialize.parseToSegments(prefixString);
     } catch (err) {
       container.textContent = prefixString; // fall back to raw text if parsing ever fails
       return;
@@ -86,8 +95,9 @@
 
   /** Plain visible text (no color codes/tags) — what "Load example" would show as text, used for search. */
   function visibleTextOf(entry) {
+    if (entry.format === 'minimessage') return entry.prefixString || '';
     try {
-      return window.PrefixDeserialize.parseToSegments(entry.prefixString, entry.format)
+      return window.PrefixDeserialize.parseToSegments(entry.prefixString)
         .map((s) => s.text)
         .join('');
     } catch (err) {
@@ -122,15 +132,17 @@
         note.textContent = 'used /prefix admin to view this page';
         row.appendChild(note);
       } else {
-        const format = document.createElement('span');
-        format.className = 'audit-format';
-        format.textContent = e.format;
-
         const preview = document.createElement('span');
         preview.className = 'audit-prefix';
         renderColoredPreview(preview, e.prefixString, e.format);
 
-        row.append(format, preview);
+        if (e.format === 'minimessage') {
+          const legacyBadge = document.createElement('span');
+          legacyBadge.className = 'audit-format';
+          legacyBadge.textContent = 'minimessage (removed)';
+          row.append(legacyBadge);
+        }
+        row.append(preview);
       }
 
       if (e.term) {

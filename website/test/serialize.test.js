@@ -5,7 +5,7 @@
 
 const assert = require('node:assert/strict');
 const { gradientColors } = require('../public/color.js');
-const { serializeSegments, serializeMiniMessage } = require('../public/serialize.js');
+const { serializeSegments } = require('../public/serialize.js');
 
 let passed = 0;
 function test(name, fn) {
@@ -60,7 +60,7 @@ test('gradientColors with count=1 samples the first position', () => {
   assert.deepEqual(gradientColors(['#FF0000', '#00FF00'], 1), ['#FF0000']);
 });
 
-// ---------- serializeSegments (legacy) ----------
+// ---------- serializeSegments ----------
 
 test('solid segment re-emits the color code before every character', () => {
   const out = serializeSegments([seg({ text: 'AB', colors: ['#555555'] })]);
@@ -72,6 +72,13 @@ test('gradient segment interpolates per character', () => {
     seg({ text: 'AB', mode: 'gradient', colors: ['#FF0000', '#0000FF'] }),
   ]);
   assert.equal(out, '&#FF0000A&#0000FFB');
+});
+
+test('multi-stop gradient segment follows every stop', () => {
+  const out = serializeSegments([
+    seg({ text: 'ABC', mode: 'gradient', colors: ['#FF0000', '#00FF00', '#0000FF'] }),
+  ]);
+  assert.equal(out, '&#FF0000A&#00FF00B&#0000FFC');
 });
 
 test('format codes are emitted in the fixed stable order after the color code', () => {
@@ -88,51 +95,6 @@ test('format codes are emitted in the fixed stable order after the color code', 
 test('empty-text segment emits a trailing color code with no character', () => {
   const out = serializeSegments([seg({ text: '', colors: ['#CC66FF'] })]);
   assert.equal(out, '&#CC66FF');
-});
-
-// ---------- serializeMiniMessage ----------
-
-test('solid segment uses the <#RRGGBB> shorthand color tag', () => {
-  const out = serializeMiniMessage([seg({ text: 'Hi', colors: ['#555555'] })]);
-  assert.equal(out, '<#555555>Hi</#555555>');
-});
-
-test('gradient segment embeds all stops once, not per character', () => {
-  const out = serializeMiniMessage([
-    seg({ text: 'ADVERTISER', mode: 'gradient', colors: ['#FFF700', '#FF8000', '#FF0000'] }),
-  ]);
-  assert.equal(out, '<gradient:#FFF700:#FF8000:#FF0000>ADVERTISER</gradient>');
-});
-
-test('format tags nest inside the color tag and close in reverse order', () => {
-  const out = serializeMiniMessage([
-    seg({ text: 'X', colors: ['#FF99CC'], bold: true, italic: true }),
-  ]);
-  assert.equal(out, '<#FF99CC><bold><italic>X</italic></bold></#FF99CC>');
-});
-
-test('empty-text segment produces no output (no "colored empty span" in MiniMessage)', () => {
-  assert.equal(serializeMiniMessage([seg({ text: '', colors: ['#CC66FF'] })]), '');
-});
-
-test('literal < and > in user text are escaped so they cannot break out of tags', () => {
-  const out = serializeMiniMessage([seg({ text: '<evil>', colors: ['#FFFFFF'] })]);
-  assert.equal(out, '<#FFFFFF>\\<evil\\></#FFFFFF>');
-});
-
-test('MiniMessage stays flat as gradient text gets longer, legacy grows linearly', () => {
-  // MiniMessage's gradient stops are embedded once regardless of text
-  // length; legacy repeats a full '&#RRGGBB' code per character. The gap
-  // widens with longer text — assert that trend directly rather than an
-  // arbitrary ratio on one short example.
-  const short = seg({ text: 'AB', mode: 'gradient', colors: ['#FFF700', '#FF8000', '#FF0000'] });
-  const long = seg({ text: 'ABABABABAB', mode: 'gradient', colors: ['#FFF700', '#FF8000', '#FF0000'] });
-  const miniGrowth = serializeMiniMessage([long]).length - serializeMiniMessage([short]).length;
-  const legacyGrowth = serializeSegments([long]).length - serializeSegments([short]).length;
-  assert.ok(
-    miniGrowth < legacyGrowth,
-    `expected MiniMessage to grow slower (+${miniGrowth}) than legacy (+${legacyGrowth}) as text lengthens`
-  );
 });
 
 console.log(`\n${passed} test(s) passed`);

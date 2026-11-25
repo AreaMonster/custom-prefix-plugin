@@ -31,10 +31,14 @@ public final class BackendClient {
         .build();
   }
 
-  public CompletableFuture<SessionCreateResult> createSession(UUID playerUuid, String playerName, boolean bypassFilter) {
+  /** @param currentPrefix the player's current rank prefix, or null if unknown */
+  public CompletableFuture<SessionCreateResult> createSession(
+      UUID playerUuid, String playerName, boolean bypassFilter, String currentPrefix) {
     String body = "{\"playerUuid\":\"" + MiniJson.escape(playerUuid.toString()) + "\","
         + "\"playerName\":\"" + MiniJson.escape(playerName) + "\","
-        + "\"bypassFilter\":" + bypassFilter + "}";
+        + "\"bypassFilter\":" + bypassFilter
+        + (currentPrefix != null ? ",\"currentPrefix\":\"" + MiniJson.escape(currentPrefix) + "\"" : "")
+        + "}";
 
     HttpRequest request = requestBuilder("/api/sessions")
         .POST(HttpRequest.BodyPublishers.ofString(body))

@@ -13,6 +13,11 @@ const config = require('./config');
  * @property {number} createdAt
  * @property {number} expiresAt
  * @property {number|null} appliedAt
+ * @property {string|null} rankPrefix - the player's current (non-custom)
+ *   rank prefix as reported by the plugin at session-creation time, used
+ *   only to offer "start from my rank prefix" in the builder.
+ * @property {number|null} closingAt - set when the page reports it was
+ *   closed; the session dies at this time unless the page comes back.
  * @property {boolean} bypassFilter - true if the plugin reported this
  *   player holds the moderation-bypass permission at session-creation
  *   time. The website has no way to check LuckPerms permissions itself,
@@ -31,8 +36,17 @@ function generateToken() {
   return crypto.randomBytes(32).toString('base64url');
 }
 
+// A closed/navigated-away tab doesn't kill the link instantly — it starts
+// a short grace period that any reload or reopen of the page cancels.
+// Browsers fire the same "page is going away" signal for a reload as for
+// a real close, so expiring immediately made reloads (and, previously,
+// simply switching tabs) destroy the link.
+const CLOSE_GRACE_MS = 60_000;
+
 function isExpired(session) {
-  return Date.now() > session.expiresAt;
+  const now = Date.now();
+  if (now > session.expiresAt) return true;
+  return session.status === 'pending' && session.closingAt != null && now > session.closingAt;
 }
 
 function deleteSession(token) {
@@ -50,7 +64,7 @@ function deleteSession(token) {
  * Create a new session for a player, invalidating any prior pending/ready
  * session that player already had (so stale links stop working).
  */
-function createSession(playerUuid, playerName, bypassFilter = false) {
+function createSession(playerUuid, playerName, bypassFilter = false, rankPrefix = null) {
   const priorToken = activeByPlayer.get(playerUuid);
   if (priorToken) {
     deleteSession(priorToken);
@@ -69,6 +83,8 @@ function createSession(playerUuid, playerName, bypassFilter = false) {
     expiresAt: now + config.sessionTtlMs,
     appliedAt: null,
     bypassFilter: !!bypassFilter,
+    rankPrefix,
+    closingAt: null,
   };
   sessions.set(token, session);
   activeByPlayer.set(playerUuid, token);
@@ -109,22 +125,25 @@ function markApplied(token) {
 }
 
 /**
- * Best-effort early expiry when the browser tab closes, but only if the
- * player never saved (still pending) — don't cancel a save that's already
- * in flight to the plugin.
+ * Called when the browser reports the page went away. Only schedules the
+ * link to die after a grace period (see CLOSE_GRACE_MS), and only if the
+ * player never saved — don't cancel a save that's already in flight to
+ * the plugin. Reopening/reloading the page calls cancelClose().
  */
-function expireIfPending(token) {
+function scheduleCloseIfPending(token) {
   const session = getSession(token);
-  if (!session) return;
-  if (session.status === 'pending') {
-    deleteSession(token);
-  }
+  if (!session || session.status !== 'pending') return;
+  session.closingAt = Date.now() + CLOSE_GRACE_MS;
+}
+
+function cancelClose(token) {
+  const session = sessions.get(token);
+  if (session) session.closingAt = null;
 }
 
 function sweepExpired() {
-  const now = Date.now();
   for (const [token, session] of sessions) {
-    if (now > session.expiresAt) {
+    if (isExpired(session)) {
       deleteSession(token);
     }
   }
@@ -139,6 +158,7 @@ module.exports = {
   markReady,
   markApplied,
   deleteSession,
-  expireIfPending,
+  scheduleCloseIfPending,
+  cancelClose,
   _sweepExpired: sweepExpired, // exposed for tests
 };

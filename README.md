@@ -2,17 +2,11 @@
 
 Lets players design their own colored/gradient chat prefix on a simple
 website and syncs it into LuckPerms in-game automatically — no manual
-`/lp` commands. Supports two output formats: LuckPerms' native legacy hex
+`/lp` commands. Prefixes are saved in LuckPerms' native legacy hex format,
+which every chat plugin that shows LuckPerms prefixes understands:
 
 ```
 &8[&#FF99CC&lF&#F58FD6&lE&#EB85E0&lM&#E07AEB&lB&#D670F5&lO&#CC66FF&lY&8] &7» &#CC66FF
-```
-
-and, for shorter output on servers whose chat renders it, MiniMessage
-gradients with any number of stops:
-
-```
-<gradient:#FFF700:#FF8000:#FF0000>ADVERTISER</gradient>
 ```
 
 ## How it works
@@ -26,12 +20,13 @@ gradients with any number of stops:
    sends it to the player in chat.
 3. The player opens the link, builds their prefix with a visual
    segment/gradient editor (multi-stop gradients, solid colors, bold/
-   italic/underline/strikethrough/obfuscated), picks an output format, and
-   saves.
+   italic/underline/strikethrough/obfuscated) and saves. The builder can
+   start from the player's current rank prefix, read from LuckPerms.
 4. The plugin (polling in the background) picks up the finished prefix and
    applies it via the real LuckPerms Java API.
-5. The link expires ~20 minutes after creation, or immediately if the
-   player closes the tab before saving.
+5. The link expires ~20 minutes after creation, or about a minute after
+   the player closes the tab without saving (reloading the page or
+   switching to another window doesn't count).
 
 Every save is checked against a word filter (blocks staff impersonation
 by default, plus your own custom blocklist — staff can bypass it via a

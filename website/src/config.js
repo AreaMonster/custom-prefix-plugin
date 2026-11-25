@@ -31,11 +31,9 @@ const sessionTtlMs = testTtlMs && testTtlMs > 0
 // this yourself (MAX_PREFIX_LENGTH in .env) if you want more — up to
 // ~185 is still reasonably safe against an unmodified default schema,
 // beyond that you're gambling unless you've actually widened the column.
-// MiniMessage output (see the format picker on the build page) barely
-// touches this cap at all even for long gradient text, since it embeds
-// gradient stops once instead of repeating a color code per letter — if
-// you mainly want longer *visible* gradient words, that's the real fix,
-// not raising this number.
+// Note the legacy format repeats a full '&#RRGGBB' code per character, so a
+// long gradient word uses this budget quickly — that's the real limit on
+// how many colored letters fit.
 const maxPrefixLength = Number(process.env.MAX_PREFIX_LENGTH) > 0
   ? Number(process.env.MAX_PREFIX_LENGTH)
   : 160;

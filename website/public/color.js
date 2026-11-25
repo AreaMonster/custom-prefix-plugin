@@ -36,10 +36,7 @@
 
   /**
    * Linear-interpolates a single color at position t (0..1) across an
-   * ordered list of 1+ stop colors, piecewise between consecutive stops —
-   * the same algorithm MiniMessage's own <gradient:...> tag uses for N
-   * stops, so the preview matches what a MiniMessage-aware chat plugin
-   * would actually render.
+   * ordered list of 1+ stop colors, piecewise between consecutive stops.
    */
   function colorAt(stops, t) {
     if (stops.length === 1) return rgbToHex(hexToRgb(stops[0]));

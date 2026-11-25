@@ -65,24 +65,8 @@
           <span aria-hidden="true">＋</span> Add segment
         </button>
         <button id="loadExample" type="button" class="secondary">
-          <span aria-hidden="true">🎲</span> Load example
+          <span aria-hidden="true">🎲</span> <span id="loadExampleLabel">Load example</span>
         </button>
-      </div>
-    </section>
-
-    <section class="format-section">
-      <div class="section-head">
-        <span class="section-label">Output format</span>
-      </div>
-      <div class="format-options">
-        <label class="format-option">
-          <input type="radio" name="format" value="legacy" checked />
-          <span><strong>Legacy</strong> <code>&amp;#RRGGBB</code> — works everywhere LuckPerms hex colors do.</span>
-        </label>
-        <label class="format-option">
-          <input type="radio" name="format" value="minimessage" />
-          <span><strong>MiniMessage</strong> <code>&lt;gradient:...&gt;</code> — much shorter, but only renders correctly if your chat/tab-list plugin parses MiniMessage tags. Test in-game before relying on it.</span>
-        </label>
       </div>
     </section>
 
@@ -132,7 +116,6 @@
   <div class="history-item">
     <div class="history-preview"></div>
     <div class="history-meta">
-      <span class="history-format-badge"></span>
       <span class="history-time muted"></span>
       <button type="button" class="history-use secondary">✎ Edit</button>
     </div>

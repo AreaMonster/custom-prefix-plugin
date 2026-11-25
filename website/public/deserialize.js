@@ -1,15 +1,17 @@
 /**
- * The inverse of serialize.js: turns an already-saved prefix string back
- * into the segment-array model the builder UI edits, so a history entry
- * can be loaded into the editor and tweaked rather than only ever being
- * reapplied verbatim.
+ * The inverse of serialize.js: turns an already-saved legacy prefix string
+ * back into the segment-array model the builder UI edits, so a history
+ * entry (or the player's current rank prefix) can be loaded into the
+ * editor and tweaked rather than only ever being reapplied verbatim.
  *
- * MiniMessage round-trips losslessly — its tags already encode segments
- * directly, including the exact gradient stop list. Legacy hex is lossier
- * for gradients: the saved string only has each character's final color,
- * not which characters originally belonged to one gradient segment vs.
- * separate solid segments that just happen to sit next to each other. See
- * the comment above parseLegacyToSegments for how that's handled.
+ * Understands everything a LuckPerms legacy prefix can contain, not just
+ * this tool's own output: '&#RRGGBB', BungeeCord-style '&x&R&R&G&G&B&B',
+ * the 16 classic color codes ('&0'-'&f'), format codes ('&l&o&n&m&k') and
+ * '&r'. As in Minecraft, a color code resets any formatting set before it.
+ *
+ * Legacy output has no segment boundary markers (just a color per
+ * character), so which characters originally belonged to one gradient is
+ * recovered heuristically — see the comment above parseLegacyToSegments.
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
@@ -21,6 +23,14 @@
   'use strict';
 
   const FORMAT_KEYS = ['bold', 'italic', 'underline', 'strikethrough', 'obfuscated'];
+  const FORMAT_FLAG = { l: 'bold', o: 'italic', n: 'underline', m: 'strikethrough', k: 'obfuscated' };
+  const DEFAULT_COLOR = '#FFFFFF';
+  const VANILLA_COLORS = {
+    0: '#000000', 1: '#0000AA', 2: '#00AA00', 3: '#00AAAA',
+    4: '#AA0000', 5: '#AA00AA', 6: '#FFAA00', 7: '#AAAAAA',
+    8: '#555555', 9: '#5555FF', a: '#55FF55', b: '#55FFFF',
+    c: '#FF5555', d: '#FF55FF', e: '#FFFF55', f: '#FFFFFF',
+  };
 
   function sameFormat(a, b) {
     return FORMAT_KEYS.every((k) => a[k] === b[k]);
@@ -37,15 +47,13 @@
     };
   }
 
-  // ---------- Legacy hex ----------
-
   /**
    * Colors alone can't tell us where one original segment ended and the
-   * next began — legacy output has no boundary markers, and a decorative
-   * character's color can easily differ from its neighbor's just as
-   * "smoothly" as a real gradient's would. Two rules keep reconstruction
-   * both safe (never merges characters that don't actually belong
-   * together) and useful (still recognizes the common case):
+   * next began, and a decorative character's color can easily differ from
+   * its neighbor's just as "smoothly" as a real gradient's would. Two
+   * rules keep reconstruction both safe (never merges characters that
+   * don't actually belong together) and useful (still recognizes the
+   * common case):
    *
    *  1. Any run of 2+ consecutive same-format characters sharing the
    *     EXACT same color is always a solid segment — unambiguous.
@@ -53,41 +61,73 @@
    *     of 3 characters) whose colors are EXACTLY reproduced by our own
    *     2-stop linear interpolation between its first and last color —
    *     i.e. only accept it as a gradient if replaying our own generator
-   *     with those two colors would recreate what's actually there. This
-   *     is why a decorative character can't get swept into a neighboring
-   *     gradient by coincidence: its presence breaks the exact-fit check,
-   *     so the search keeps shrinking the window until it either finds a
-   *     genuine fit or gives up. Only 2 stops are ever reconstructed even
-   *     if the original had more (3+-stop originals degrade gracefully
-   *     into per-character solid segments instead — still byte-identical
-   *     on re-save, just not editable as one gradient control).
+   *     with those two colors would recreate what's actually there. A
+   *     neighboring decorative character breaks the exact-fit check, so
+   *     the search keeps shrinking the window until it finds a genuine
+   *     fit or gives up. Only 2 stops are ever reconstructed even if the
+   *     original had more (3+-stop originals degrade gracefully into
+   *     per-character solid segments — still byte-identical on re-save,
+   *     just not editable as one gradient control).
    */
   function parseLegacyToSegments(input) {
     /** @type {Array<{ch: string|null, color: string} & ReturnType<typeof blankFormat>>} */
     const records = [];
+    let color = DEFAULT_COLOR;
+    let fmt = blankFormat();
+    let codesSinceLastChar = false;
     let i = 0;
-    let color = '#FFFFFF';
 
     while (i < input.length) {
-      const fmt = blankFormat();
-      while (input[i] === '&' && i + 1 < input.length) {
-        const next = input[i + 1];
-        if (next === '#' && input.length >= i + 8) {
+      if (input[i] === '&') {
+        const next = (input[i + 1] || '').toLowerCase();
+
+        if (next === '#' && /^[0-9a-f]{6}$/i.test(input.slice(i + 2, i + 8))) {
           color = `#${input.slice(i + 2, i + 8).toUpperCase()}`;
+          fmt = blankFormat();
           i += 8;
-        } else if (next === 'l') { fmt.bold = true; i += 2; }
-        else if (next === 'o') { fmt.italic = true; i += 2; }
-        else if (next === 'n') { fmt.underline = true; i += 2; }
-        else if (next === 'm') { fmt.strikethrough = true; i += 2; }
-        else if (next === 'k') { fmt.obfuscated = true; i += 2; }
-        else { i += 2; } // unrecognized code, skip defensively
+          codesSinceLastChar = true;
+          continue;
+        }
+        if (next === 'x') {
+          const m = /^&x(?:&[0-9a-f]){6}/i.exec(input.slice(i));
+          if (m) {
+            color = `#${m[0].slice(2).replace(/&/g, '').toUpperCase()}`;
+            fmt = blankFormat();
+            i += m[0].length;
+            codesSinceLastChar = true;
+            continue;
+          }
+        }
+        if (Object.prototype.hasOwnProperty.call(VANILLA_COLORS, next)) {
+          color = VANILLA_COLORS[next];
+          fmt = blankFormat();
+          i += 2;
+          codesSinceLastChar = true;
+          continue;
+        }
+        if (Object.prototype.hasOwnProperty.call(FORMAT_FLAG, next)) {
+          fmt = { ...fmt, [FORMAT_FLAG[next]]: true };
+          i += 2;
+          codesSinceLastChar = true;
+          continue;
+        }
+        if (next === 'r') {
+          color = DEFAULT_COLOR;
+          fmt = blankFormat();
+          i += 2;
+          codesSinceLastChar = true;
+          continue;
+        }
+        i += 1; // not a recognized code: drop the lone '&'
+        continue;
       }
-      if (i >= input.length) {
-        records.push({ ch: null, color, ...fmt });
-        break;
-      }
+
       records.push({ ch: input[i], color, ...fmt });
+      codesSinceLastChar = false;
       i += 1;
+    }
+    if (codesSinceLastChar) {
+      records.push({ ch: null, color, ...fmt }); // trailing color with no character
     }
 
     const segments = [];
@@ -154,89 +194,5 @@
     return segments;
   }
 
-  // ---------- MiniMessage ----------
-
-  const FORMAT_TAG_NAMES = {
-    bold: ['bold', 'b'], italic: ['italic', 'i', 'em'], underline: ['underlined', 'u'],
-    strikethrough: ['strikethrough', 'st'], obfuscated: ['obfuscated', 'obf'],
-  };
-
-  function formatKeyForTag(name) {
-    for (const key of FORMAT_KEYS) {
-      if (FORMAT_TAG_NAMES[key].includes(name)) return key;
-    }
-    return null;
-  }
-
-  function parseMiniMessageToSegments(input) {
-    const segments = [];
-    let i = 0;
-
-    while (i < input.length) {
-      if (input[i] !== '<') { i += 1; continue; } // stray text outside any tag, ignore defensively
-
-      const close = input.indexOf('>', i + 1);
-      if (close === -1) break;
-      const tagContent = input.slice(i + 1, close);
-      i = close + 1;
-
-      let colors;
-      let closingName;
-      if (tagContent.toLowerCase().startsWith('gradient:')) {
-        colors = tagContent.slice('gradient:'.length).split(':').map((c) => c.toUpperCase());
-        closingName = 'gradient';
-      } else {
-        colors = [tagContent.toUpperCase()];
-        closingName = tagContent;
-      }
-
-      const fmt = blankFormat();
-      let text = '';
-      const closeTag = `</${closingName}>`.toLowerCase();
-      while (i < input.length) {
-        if (input.slice(i, i + closeTag.length).toLowerCase() === closeTag) {
-          i += closeTag.length;
-          break;
-        }
-        if (input[i] === '\\' && (input[i + 1] === '<' || input[i + 1] === '>' || input[i + 1] === '\\')) {
-          text += input[i + 1];
-          i += 2;
-          continue;
-        }
-        if (input[i] === '<') {
-          const c2 = input.indexOf('>', i + 1);
-          if (c2 === -1) { i += 1; continue; }
-          const inner = input.slice(i + 1, c2);
-          i = c2 + 1;
-          const isClosing = inner.startsWith('/');
-          const name = (isClosing ? inner.slice(1) : inner).toLowerCase();
-          const key = formatKeyForTag(name);
-          // Only opening tags set a flag; closing tags are just consumed.
-          // Our own output never toggles a format tag on/off more than
-          // once per segment, so there's no real scoping to track, and
-          // treating a close tag as "set false" would wipe out the flag
-          // the matching open tag just recorded.
-          if (key && !isClosing) fmt[key] = true;
-          continue;
-        }
-        text += input[i];
-        i += 1;
-      }
-
-      segments.push({
-        text,
-        mode: colors.length > 1 ? 'gradient' : 'solid',
-        colors,
-        ...fmt,
-      });
-    }
-    return segments;
-  }
-
-  /** @param {'legacy'|'minimessage'} format */
-  function parseToSegments(prefixString, format) {
-    return format === 'minimessage' ? parseMiniMessageToSegments(prefixString) : parseLegacyToSegments(prefixString);
-  }
-
-  return { parseToSegments };
+  return { parseToSegments: parseLegacyToSegments };
 });

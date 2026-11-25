@@ -19,15 +19,15 @@ function sessionUrl(token) {
   return `${config.publicBaseUrl}/p/${token}`;
 }
 
-// POST /api/sessions  { playerUuid, playerName, bypassFilter } -> { token, url, expiresAt }
+// POST /api/sessions  { playerUuid, playerName, bypassFilter, currentPrefix? } -> { token, url, expiresAt }
 // Called by the plugin when a player runs /prefix. Invalidates any prior
 // still-active session for that player. bypassFilter is the plugin's own
 // LuckPerms permission check result for that player, at the moment they
 // ran the command — the website has no way to check permissions itself,
 // so it trusts whatever the plugin (already gated behind the shared API
 // key) reports here.
-router.post('/', express.json({ limit: '2kb' }), (req, res) => {
-  const { playerUuid, playerName, bypassFilter } = req.body || {};
+router.post('/', express.json({ limit: '4kb' }), (req, res) => {
+  const { playerUuid, playerName, bypassFilter, currentPrefix } = req.body || {};
 
   if (typeof playerUuid !== 'string' || !UUID_RE.test(playerUuid)) {
     return res.status(400).json({ error: 'playerUuid must be a valid UUID' });
@@ -37,7 +37,18 @@ router.post('/', express.json({ limit: '2kb' }), (req, res) => {
   }
 
   const normalizedUuid = playerUuid.toLowerCase();
-  const session = store.createSession(normalizedUuid, playerName, bypassFilter === true);
+  // currentPrefix is the player's current rank prefix as the plugin read
+  // it from LuckPerms — only ever used to pre-fill the builder, and any
+  // save still goes through the full validator/word filter. Just drop it
+  // if it's not a sane string rather than failing session creation.
+  const rankPrefix = typeof currentPrefix === 'string'
+    && currentPrefix.length > 0
+    && currentPrefix.length <= 512
+    && !/[\u0000-\u001f\u007f]/.test(currentPrefix)
+    ? currentPrefix
+    : null;
+
+  const session = store.createSession(normalizedUuid, playerName, bypassFilter === true, rankPrefix);
 
   res.status(201).json({
     token: session.token,

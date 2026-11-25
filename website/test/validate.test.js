@@ -18,82 +18,40 @@ function test(name, fn) {
   }
 }
 
-function valid(input, format) {
-  return validatePrefixString(input, format).valid;
+function valid(input) {
+  return validatePrefixString(input).valid;
 }
 
-// ---------- legacy ----------
-
-test('legacy: accepts well-formed hex + format codes', () => {
-  assert.equal(valid('&#FF99CC&lHi', 'legacy'), true);
+test('accepts well-formed hex + format codes', () => {
+  assert.equal(valid('&#FF99CC&lHi'), true);
 });
-test('legacy: rejects malformed hex', () => {
-  assert.equal(valid('&#ZZZZZZ', 'legacy'), false);
+test('rejects malformed hex', () => {
+  assert.equal(valid('&#ZZZZZZ'), false);
 });
-test('legacy: accepts a real legacy color code (b is in 0-9a-f range)', () => {
-  assert.equal(valid('A&bB', 'legacy'), true);
+test('accepts a real legacy color code (b is in 0-9a-f range)', () => {
+  assert.equal(valid('A&bB'), true);
 });
-test('legacy: rejects a bare & not followed by a valid code', () => {
-  assert.equal(valid('A&', 'legacy'), false);
+test('rejects a bare & not followed by a valid code', () => {
+  assert.equal(valid('A&'), false);
 });
-test('legacy: empty string is valid (clears the prefix)', () => {
-  assert.equal(valid('', 'legacy'), true);
+test('empty string is valid (clears the prefix)', () => {
+  assert.equal(valid(''), true);
 });
-test('legacy: rejects control characters', () => {
-  assert.equal(valid('Hi\nthere', 'legacy'), false);
+test('rejects control characters', () => {
+  assert.equal(valid('Hi\nthere'), false);
 });
-
-// ---------- minimessage: allowed ----------
-
-test('minimessage: gradient tag with hex stops', () => {
-  assert.equal(valid('<gradient:#FF0000:#00FF00>Hi</gradient>', 'minimessage'), true);
-});
-test('minimessage: <#RRGGBB> shorthand color tag, open and close', () => {
-  assert.equal(valid('<#FF0000>Hi</#FF0000>', 'minimessage'), true);
-});
-test('minimessage: format tags (bold/italic/etc)', () => {
-  assert.equal(valid('<bold><italic>Hi</italic></bold>', 'minimessage'), true);
-});
-test('minimessage: escaped literal angle brackets in text', () => {
-  assert.equal(valid('<#FF0000>\\<Hi\\></#FF0000>', 'minimessage'), true);
-});
-test('minimessage: tags do not need to balance (allowlist only, not a grammar check)', () => {
-  assert.equal(valid('<bold>Hi', 'minimessage'), true);
-});
-
-// ---------- minimessage: rejected (this is the actual security boundary) ----------
-
-test('minimessage: rejects <click> (would let a player fake a clickable command)', () => {
-  assert.equal(valid('<click:run_command:/op hacker>Hi</click>', 'minimessage'), false);
-});
-test('minimessage: rejects <hover>', () => {
-  assert.equal(valid('<hover:show_text:evil>Hi</hover>', 'minimessage'), false);
-});
-test('minimessage: rejects <insert>', () => {
-  assert.equal(valid('<insert:malicious>Hi</insert>', 'minimessage'), false);
-});
-test('minimessage: rejects <nbt>', () => {
-  assert.equal(valid('<nbt:block:1:2:3:Items>Hi</nbt>', 'minimessage'), false);
-});
-test('minimessage: rejects a gradient stop that is not valid hex', () => {
-  assert.equal(valid('<gradient:not-a-color>Hi</gradient>', 'minimessage'), false);
-});
-test('minimessage: rejects a truly unterminated tag (no closing >)', () => {
-  assert.equal(valid('<bold', 'minimessage'), false);
-});
-test('minimessage: rejects a stray unescaped >', () => {
-  assert.equal(valid('Hi>there', 'minimessage'), false);
-});
-
-// ---------- shared ----------
-
 test('rejects input longer than MAX_LENGTH', () => {
-  assert.equal(valid('a'.repeat(MAX_LENGTH + 1), 'legacy'), false);
-  assert.equal(valid('a'.repeat(MAX_LENGTH), 'legacy'), true);
+  assert.equal(valid('a'.repeat(MAX_LENGTH + 1)), false);
+  assert.equal(valid('a'.repeat(MAX_LENGTH)), true);
 });
 test('rejects non-string input', () => {
-  assert.equal(valid(12345, 'legacy'), false);
-  assert.equal(valid(null, 'legacy'), false);
+  assert.equal(valid(12345), false);
+  assert.equal(valid(null), false);
+});
+test('MiniMessage-style tags are just literal text now, never interpreted', () => {
+  // The format was removed; a tag-looking string must not get any special
+  // treatment (it's plain characters as far as this validator goes).
+  assert.equal(valid('<gradient:#FF0000:#00FF00>Hi</gradient>'), true);
 });
 
 console.log(`\n${passed} test(s) passed`);

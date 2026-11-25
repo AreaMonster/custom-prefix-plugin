@@ -21,20 +21,11 @@ function test(name, fn) {
 
 // ---------- textExtract ----------
 
-test('extractVisibleText (legacy) strips color codes and format codes', () => {
-  assert.equal(extractVisibleText('&#FF99CC&lF&#CC66FFE', 'legacy'), 'FE');
+test('extractVisibleText strips color codes and format codes', () => {
+  assert.equal(extractVisibleText('&#FF99CC&lF&#CC66FFE'), 'FE');
 });
-test('extractVisibleText (legacy) handles a trailing color-only code', () => {
-  assert.equal(extractVisibleText('&#555555[&#CC66FFHi&#555555]&#CC66FF', 'legacy'), '[Hi]');
-});
-test('extractVisibleText (minimessage) strips tags but keeps text', () => {
-  assert.equal(
-    extractVisibleText('<gradient:#FF0000:#00FF00><bold>Hi</bold></gradient>', 'minimessage'),
-    'Hi'
-  );
-});
-test('extractVisibleText (minimessage) unescapes literal angle brackets', () => {
-  assert.equal(extractVisibleText('<#FFFFFF>\\<evil\\></#FFFFFF>', 'minimessage'), '<evil>');
+test('extractVisibleText handles a trailing color-only code', () => {
+  assert.equal(extractVisibleText('&#555555[&#CC66FFHi&#555555]&#CC66FF'), '[Hi]');
 });
 
 // ---------- moderation: staff impersonation (built-in defaults) ----------

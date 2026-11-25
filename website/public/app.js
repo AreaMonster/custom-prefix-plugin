@@ -24,7 +24,7 @@
     saveStatus: document.getElementById('saveStatus'),
     template: document.getElementById('segmentTemplate'),
     stopTemplate: document.getElementById('colorStopTemplate'),
-    formatRadios: document.querySelectorAll('input[name="format"]'),
+    loadExampleLabel: document.getElementById('loadExampleLabel'),
     historySection: document.getElementById('historySection'),
     historyList: document.getElementById('historyList'),
     historyItemTemplate: document.getElementById('historyItemTemplate'),
@@ -41,21 +41,18 @@
 
   /** @type {Array<object>} */
   let segments = [];
-  let expiresAt = null;
+  let deadline = null; // performance.now() timestamp at which the link expires
   let countdownTimer = null;
   let obfuscateTimer = null;
   let saved = false;
   let saving = false;
-
-  function currentFormat() {
-    const checked = document.querySelector('input[name="format"]:checked');
-    return checked ? checked.value : 'legacy';
-  }
+  // The player's current rank prefix (from LuckPerms, via the plugin), if
+  // the server knew it — lets the example button start from something
+  // real instead of a made-up sample.
+  let rankPrefix = null;
 
   function serializeCurrent() {
-    return currentFormat() === 'minimessage'
-      ? window.PrefixSerialize.serializeMiniMessage(segments)
-      : window.PrefixSerialize.serializeSegments(segments);
+    return window.PrefixSerialize.serializeSegments(segments);
   }
 
   function defaultSegment(overrides) {
@@ -75,23 +72,29 @@
     );
   }
 
-  // Visually equivalent to the classic example
-  // "&8[&#FF99CC&lF...&lY&8] &7» &#CC66FF" — expressed entirely in hex
-  // (LuckPerms renders '&8'/'&7' and their hex equivalents identically),
-  // which keeps this tool's output format uniform and simple.
+  // Generic starting point, only used when we don't know the player's
+  // own rank prefix.
   function exampleSegments() {
     return [
       defaultSegment({ text: '[', colors: ['#555555'] }),
       defaultSegment({
-        text: 'FEMBOY',
+        text: 'VIP',
         mode: 'gradient',
-        colors: ['#FF99CC', '#CC66FF'],
+        colors: ['#FFD700', '#FF8C00'],
         bold: true,
       }),
       defaultSegment({ text: ']', colors: ['#555555'] }),
       defaultSegment({ text: ' » ', colors: ['#AAAAAA'] }),
-      defaultSegment({ text: '', colors: ['#CC66FF'] }),
     ];
+  }
+
+  // The player's current rank prefix parsed into editable segments, or
+  // null if there isn't one (or it has no visible text to start from).
+  function rankPrefixSegments() {
+    if (!rankPrefix) return null;
+    const parsed = window.PrefixDeserialize.parseToSegments(rankPrefix);
+    if (!parsed.some((s) => s.text.length > 0)) return null;
+    return parsed.map((s) => defaultSegment(s));
   }
 
   function charColors(segment) {
@@ -192,18 +195,10 @@
     entries.forEach((entry) => {
       const node = els.historyItemTemplate.content.firstElementChild.cloneNode(true);
       const previewEl = node.querySelector('.history-preview');
-      const badge = node.querySelector('.history-format-badge');
       const time = node.querySelector('.history-time');
       const useBtn = node.querySelector('.history-use');
 
-      if (entry.format === 'minimessage') {
-        previewEl.textContent = entry.prefixString;
-        previewEl.classList.add('history-preview-plain');
-        badge.textContent = 'MiniMessage';
-      } else {
-        renderLegacyPreview(previewEl, entry.prefixString);
-        badge.textContent = 'Legacy';
-      }
+      renderLegacyPreview(previewEl, entry.prefixString);
       time.textContent = relativeTime(entry.savedAt);
 
       useBtn.addEventListener('click', () => editHistoryEntry(entry));
@@ -228,11 +223,8 @@
   // changed while keeping the same gradient. Nothing is saved until the
   // player explicitly hits Save again.
   function editHistoryEntry(entry) {
-    const radio = document.querySelector(`input[name="format"][value="${entry.format}"]`);
-    if (radio) radio.checked = true;
-
     nextId = 1;
-    segments = window.PrefixDeserialize.parseToSegments(entry.prefixString, entry.format)
+    segments = window.PrefixDeserialize.parseToSegments(entry.prefixString)
       .map((s) => defaultSegment(s));
     renderSegments();
     onChange();
@@ -371,12 +363,10 @@
 
   els.loadExample.addEventListener('click', () => {
     nextId = 1;
-    segments = exampleSegments();
+    segments = rankPrefixSegments() || exampleSegments();
     renderSegments();
     onChange();
   });
-
-  els.formatRadios.forEach((radio) => radio.addEventListener('change', onChange));
 
   function formatCountdown(ms) {
     const total = Math.max(0, Math.floor(ms / 1000));
@@ -387,8 +377,13 @@
 
   function startCountdown() {
     clearInterval(countdownTimer);
+    els.countdown.textContent = formatCountdown(deadline - performance.now());
     countdownTimer = setInterval(() => {
-      const remaining = expiresAt - Date.now();
+      // Counted down against a deadline derived from the SERVER's clock
+      // (see init), never Date.now() vs the server's expiresAt — a player
+      // whose PC clock is off by even a few minutes would otherwise see a
+      // brand-new link as already expired.
+      const remaining = deadline - performance.now();
       if (remaining <= 0) {
         clearInterval(countdownTimer);
         showExpired();
@@ -406,21 +401,23 @@
     els.subtitle.textContent = '';
   }
 
-  function sendClose() {
-    if (saved) return; // don't cancel a save that's already in flight/done
+  // Tell the server the page went away so an abandoned link can expire
+  // early. Deliberately only on 'pagehide' (the page is really leaving —
+  // closing the tab, navigating, reloading), NOT on 'visibilitychange':
+  // that also fires whenever the player merely switches to another tab or
+  // window (e.g. alt-tabbing back to Minecraft), which used to kill a
+  // perfectly good link within seconds of opening it. The server only
+  // starts a short grace period from this signal, and a reload cancels it.
+  window.addEventListener('pagehide', (event) => {
+    if (saved || event.persisted) return; // saved already, or just entering the back/forward cache
     try {
       navigator.sendBeacon(`/api/prefix/${token}/close`);
     } catch (e) {
       /* best effort */
     }
-  }
-  window.addEventListener('beforeunload', sendClose);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') sendClose();
   });
 
   els.save.addEventListener('click', async () => {
-    const format = currentFormat();
     const prefixString = serializeCurrent();
     if (prefixString.length > MAX_PREFIX_LENGTH) return; // guarded by disabled state too
     saving = true;
@@ -430,7 +427,7 @@
       const res = await fetch(`/api/prefix/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prefixString, format }),
+        body: JSON.stringify({ prefixString }),
       });
       if (res.status === 410) {
         showExpired();
@@ -481,8 +478,13 @@
       return;
     }
 
-    expiresAt = data.expiresAt;
+    // Remaining time per the server's own clock, anchored to this page's
+    // monotonic timer so the player's wall clock never enters into it.
+    const serverNow = typeof data.serverNow === 'number' ? data.serverNow : Date.now();
+    deadline = performance.now() + Math.max(0, data.expiresAt - serverNow);
     if (data.maxPrefixLength > 0) MAX_PREFIX_LENGTH = data.maxPrefixLength;
+    rankPrefix = typeof data.rankPrefix === 'string' ? data.rankPrefix : null;
+    if (rankPrefixSegments()) els.loadExampleLabel.textContent = 'Start from my rank prefix';
     els.subtitle.textContent = `Building a custom prefix for ${data.playerName}`;
     els.builder.hidden = false;
 

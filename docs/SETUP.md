@@ -208,20 +208,27 @@ prefixes (never anyone else's — scoped the same way every other page is,
 via their one-time link), with an **Edit** button that loads one back
 into the segment builder — same as clicking "Load example," just from a
 real past save instead of the sample. Nothing is reapplied until they hit
-Save again, so they can freely tweak the text/colors/format first (e.g.
-keep a gradient but change the word it's applied to) or just resave it
-as-is. Legacy-format entries reconstruct losslessly for solid colors and
-2-stop gradients; a 3+-stop gradient over a very short run of characters
-can come back as individual solid letters instead of one gradient control
-(still visually identical, just less convenient to tweak further) —
-MiniMessage entries always reconstruct exactly regardless, since their
-tags already encode the segment structure directly. Persisted to
-`website/data/history.json` (survives restarts; the Docker volume for
-`data/` is already set up).
+Save again, so they can freely tweak the text/colors first (e.g. keep a
+gradient but change the word it's applied to) or just resave it as-is.
+Solid colors and 2-stop gradients reconstruct exactly; a 3+-stop gradient
+over a very short run of characters can come back as individual solid
+letters instead of one gradient control (still visually identical, just
+less convenient to tweak further). Persisted to `website/data/history.json`
+(survives restarts; the Docker volume for `data/` is already set up).
+
+**Starting from the player's rank prefix.** When a player runs `/prefix`,
+the plugin reads their current rank prefix from LuckPerms (the
+highest-priority prefix that isn't the custom one this plugin manages, so
+players who already have a custom prefix still get their *rank*, not their
+own previous design) and passes it along with the link. The builder's
+example button then reads **"Start from my rank prefix"** and loads it as
+editable segments — plain `&c`-style codes, `&#RRGGBB`, and `&x&r&r&g&g&b&b`
+are all understood. If LuckPerms has no usable rank prefix for the player,
+the button is a plain **"Load example"** with a generic sample instead.
 
 **Admin audit log.** Every save attempt — accepted or blocked — is
 recorded with the player, prefix (rendered with its actual in-game colors,
-not raw hex codes), format, and (if blocked) which term matched. View it
+not raw hex codes), and (if blocked) which term matched. View it
 at `https://prefix.yourdomain.com/admin.html` and log in with
 `ADMIN_USERNAME`/`ADMIN_PASSWORD` from `.env` — a **separate credential
 from `BACKEND_API_KEY`**, so admins never need to know/paste the plugin's
@@ -283,8 +290,10 @@ bypassed".
 6. Stop the website process and run `/prefix` — confirm you get the
    configured "couldn't reach the prefix server" message instead of an
    error/stack trace in chat.
-7. Open a link, close the tab immediately without saving — re-check its
-   status via curl and confirm it now reads as expired.
+7. Open a link, close the tab without saving — about a minute later
+   (not instantly), re-check its status via curl and confirm it now reads
+   as expired. Also confirm that reloading the page, or switching to
+   another window and back, does **not** expire it.
 8. Run `/prefix remove` — confirm the prefix node is gone from
    `/lp user <name> permission info` immediately, with no website
    round-trip needed (works even with the website stopped).
@@ -302,50 +311,33 @@ bypassed".
 
 ## Notes / things you may want to adjust
 
-- **Output format — Legacy hex vs. MiniMessage:** the builder page has a
-  format picker. **Legacy** (`&#RRGGBB` repeated per character) is the
-  default and works anywhere LuckPerms hex colors already work — this is
-  what every example in this doc uses. **MiniMessage**
-  (`<gradient:#RRGGBB:#RRGGBB:...>text</gradient>`, arbitrary number of
-  stops) is far more compact since gradient stops are embedded once
-  instead of repeated per letter, but it only *renders* as a gradient
-  in-game if whatever displays your tab list/chat (a chat plugin, TAB,
-  etc.) actually parses MiniMessage tags — LuckPerms itself just stores
-  whichever string you give it as opaque text either way. **Test a
-  MiniMessage prefix in-game before relying on it**; if it shows up as
-  literal `<gradient:...>` text in chat, your renderer doesn't support it
-  and you should stick to Legacy. The server also only accepts a specific
-  allowlist of safe tags in MiniMessage mode (color/gradient/formatting
-  only — never `<click>`, `<hover>`, `<insert>`, etc.), since the prefix
-  string is player-controlled and those tags could otherwise be abused by
-  whatever eventually renders it.
+- **Output format:** prefixes are always saved as LuckPerms legacy hex
+  (`&#RRGGBB` repeated per character), which every chat plugin that
+  displays LuckPerms prefixes understands. (An earlier version also
+  offered MiniMessage; it was removed because plugins like LPC don't
+  render MiniMessage tags inside `{prefix}`, so those prefixes showed up as
+  literal `<gradient:...>` text. Old MiniMessage entries in your history
+  are hidden from players and shown as plain text in the audit log.)
 - **Prefix length cap (160 chars, configurable):** LuckPerms stores
   prefixes wrapped as `prefix.<priority>.<value>` in a single database
   column that defaults to `VARCHAR(200)` on MySQL/MariaDB. `MAX_PREFIX_LENGTH`
   in `.env` (default 160) keeps nothing a player builds able to exceed
   what a default, untouched LuckPerms install can actually store — you do
-  **not** need to modify your database for this tool to work. Want more
-  room? Two options, in order of what I'd actually recommend:
-  1. Switch the build page's format picker to **MiniMessage** — gradient
-     stops are embedded once instead of repeated per letter, so long
-     gradient *text* barely uses this budget at all. This is almost
-     always the better fix if what you actually want is longer-looking
-     rainbow/gradient words.
-  2. Raise `MAX_PREFIX_LENGTH` directly. Safe up to ~185 or so against an
-     unmodified default schema; past that you're gambling unless you've
-     actually widened the `permission` column yourself (`ALTER TABLE
-     luckperms_user_permissions MODIFY permission VARCHAR(500) NOT NULL;`,
-     adjusting for your `table-prefix`) — in which case raise it as far as
-     you like.
-  The frontend reads this value from the server on page load, so you only
-  ever need to change it in one place (`.env`).
-- The example ("Load example") button and this doc reproduce the sample
-  prefix entirely in `&#RRGGBB` hex (including the bracket/separator,
-  which were originally plain legacy codes like `&8`/`&7`) — hex renders
-  identically in LuckPerms/Minecraft and keeps the tool's output format
-  uniform. If you want the visual editor to also offer picking the 16
-  classic legacy color codes directly (instead of always emitting hex),
-  that's a small addition to `website/public/app.js` / `serialize.js`.
+  **not** need to modify your database for this tool to work. Each colored
+  letter costs ~9+ characters of this budget (a full `&#RRGGBB` code per
+  letter), so a long gradient word uses it up quickly. Want more room?
+  Raise `MAX_PREFIX_LENGTH` directly. Safe up to ~185 or so against an
+  unmodified default schema; past that you're gambling unless you've
+  actually widened the `permission` column yourself (`ALTER TABLE
+  luckperms_user_permissions MODIFY permission VARCHAR(500) NOT NULL;`,
+  adjusting for your `table-prefix`) — in which case raise it as far as
+  you like. The frontend reads this value from the server on page load, so
+  you only ever need to change it in one place (`.env`).
+- **Links that can't be clicked:** the link is sent as clickable text plus
+  the plain URL on a second line. Players with "Web Links" turned off in
+  their Minecraft chat settings, and Bedrock players joining through
+  Geyser, can't click chat links at all — they'll need to copy the URL
+  text (or enable web links) instead.
 - **What's persistent vs. ephemeral:** active links/sessions
   (`sessionStore.js`) are still deliberately in-memory-only and reset on
   restart — a stale link just means "run `/prefix` again," no real cost.

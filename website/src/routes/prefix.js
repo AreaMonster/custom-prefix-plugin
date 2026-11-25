@@ -13,28 +13,33 @@ const { createRateLimiter } = require('../middleware/rateLimit');
 const router = express.Router();
 router.use(createRateLimiter({ windowMs: 60_000, max: 30 }));
 
-// GET /api/prefix/:token -> { playerName, status, expiresAt, maxPrefixLength }
+// GET /api/prefix/:token -> { playerName, status, expiresAt, serverNow, maxPrefixLength, rankPrefix }
 // The token itself is the credential here — no API key, this is the
 // browser-facing side of a temporary personal link. maxPrefixLength is
 // sent here rather than hardcoded client-side so the page always reflects
 // whatever MAX_PREFIX_LENGTH is actually configured server-side.
+// serverNow lets the page count down against the server's clock instead of
+// the player's own (which can be minutes or hours off and would otherwise
+// make a fresh link look expired on arrival).
 router.get('/:token', (req, res) => {
   const session = store.getSession(req.params.token);
   if (!session) {
     return res.status(410).json({ error: 'This link has expired. Run /prefix again in-game.' });
   }
+  // The page is (re)loading, so a pending "tab was closed" countdown from
+  // a previous reload/close no longer applies.
+  store.cancelClose(session.token);
   res.json({
     playerName: session.playerName,
     status: session.status,
     expiresAt: session.expiresAt,
+    serverNow: Date.now(),
     maxPrefixLength: config.maxPrefixLength,
+    rankPrefix: session.rankPrefix,
   });
 });
 
-// POST /api/prefix/:token  { prefixString, format } -> { ok: true }
-// format is 'legacy' (default) or 'minimessage' — LuckPerms stores either
-// as an opaque string, so this only affects which validator runs; the
-// plugin doesn't need to know which one was used.
+// POST /api/prefix/:token  { prefixString } -> { ok: true }
 router.post('/:token', express.json({ limit: '4kb' }), (req, res) => {
   const session = store.getSession(req.params.token);
   if (!session) {
@@ -44,13 +49,13 @@ router.post('/:token', express.json({ limit: '4kb' }), (req, res) => {
     return res.status(409).json({ error: `session is already ${session.status}` });
   }
 
-  const format = req.body && req.body.format === 'minimessage' ? 'minimessage' : 'legacy';
-  const result = validatePrefixString(req.body && req.body.prefixString, format);
+  const format = 'legacy';
+  const result = validatePrefixString(req.body && req.body.prefixString);
   if (!result.valid) {
     return res.status(400).json({ error: result.error });
   }
 
-  const visibleText = extractVisibleText(result.value, format);
+  const visibleText = extractVisibleText(result.value);
   const moderationResult = session.bypassFilter ? { blocked: false } : moderation.checkText(visibleText);
   if (moderationResult.blocked) {
     auditLog.record({
@@ -90,15 +95,19 @@ router.get('/:token/history', (req, res) => {
   if (!session) {
     return res.status(410).json({ error: 'This link has expired. Run /prefix again in-game.' });
   }
-  res.json({ entries: history.getFor(session.playerUuid) });
+  // MiniMessage prefixes (a format that has since been removed) can't be
+  // loaded into the builder, so don't offer them.
+  const entries = history.getFor(session.playerUuid).filter((e) => e.format !== 'minimessage');
+  res.json({ entries });
 });
 
 // POST /api/prefix/:token/close
-// Best-effort early expiry sent via navigator.sendBeacon when the tab is
-// closed/hidden before saving. Not relied on as the sole expiry mechanism —
-// the hard TTL in sessionStore is authoritative.
+// Sent via navigator.sendBeacon when the page is going away before
+// saving. Only starts a short grace period (reloading the page cancels
+// it) rather than killing the link outright; the hard TTL in sessionStore
+// remains the authoritative expiry either way.
 router.post('/:token/close', (req, res) => {
-  store.expireIfPending(req.params.token);
+  store.scheduleCloseIfPending(req.params.token);
   // sendBeacon doesn't care about the response body; keep it minimal.
   res.status(204).end();
 });
